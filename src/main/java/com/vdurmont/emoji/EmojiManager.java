@@ -1,15 +1,19 @@
+/*
+Apache Commons Text
+Copyright 2014-2020 The Apache Software Foundation
+
+This product includes software developed at
+The Apache Software Foundation (https://www.apache.org/).
+*/
+
 package com.vdurmont.emoji;
+
+import org.apache.commons.text.similarity.FuzzyScore;
+import org.apache.commons.text.similarity.LevenshteinDistance;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Holds the loaded emojis and provides search functions.
@@ -18,28 +22,49 @@ import java.util.Set;
  */
 public class EmojiManager {
   private static final String PATH = "/emojis.json";
-  private static final Map<String, Emoji> EMOJIS_BY_ALIAS =
-    new HashMap<String, Emoji>();
+  private static final String EMOJIS_SER_FILE = "emojis.ser";
+  private static Map<String, Map<String, Emoji>> EMOJIS_BY_TAG_ALIAS =
+    new HashMap<String, Map<String, Emoji>>();
   private static final Map<String, Set<Emoji>> EMOJIS_BY_TAG =
     new HashMap<String, Set<Emoji>>();
   private static final List<Emoji> ALL_EMOJIS;
   static final EmojiTrie EMOJI_TRIE;
 
+    // Tag string constants
+    public static final String TAG_NONE = "_none";
+
   static {
     try {
+      EMOJIS_BY_TAG_ALIAS.put(TAG_NONE, new HashMap<String, Emoji>());
+
       InputStream stream = EmojiLoader.class.getResourceAsStream(PATH);
       List<Emoji> emojis = EmojiLoader.loadEmojis(stream);
       ALL_EMOJIS = emojis;
       for (Emoji emoji : emojis) {
-        for (String tag : emoji.getTags()) {
-          if (EMOJIS_BY_TAG.get(tag) == null) {
-            EMOJIS_BY_TAG.put(tag, new HashSet<Emoji>());
+          for (String tag : emoji.getTags()) {
+              if (EMOJIS_BY_TAG.get(tag) == null) {
+                  EMOJIS_BY_TAG.put(tag, new HashSet<Emoji>());
+              }
+              EMOJIS_BY_TAG.get(tag).add(emoji);
+
+              if (!EMOJIS_BY_TAG_ALIAS.containsKey(tag)) {
+                  EMOJIS_BY_TAG_ALIAS.put(tag, new HashMap<String, Emoji>());
+              }
           }
-          EMOJIS_BY_TAG.get(tag).add(emoji);
-        }
-        for (String alias : emoji.getAliases()) {
-          EMOJIS_BY_ALIAS.put(alias, emoji);
-        }
+      }
+
+      for (Emoji emoji : emojis) {
+          if (emoji.getTags().isEmpty()) {
+              for (String alias : emoji.getAliases()) {
+                  EMOJIS_BY_TAG_ALIAS.get(TAG_NONE).put(alias, emoji);
+              }
+          } else {
+              for (String tag : emoji.getTags()) {
+                  for (String alias : emoji.getAliases()) {
+                      EMOJIS_BY_TAG_ALIAS.get(tag).put(alias, emoji);
+                  }
+              }
+          }
       }
 
       EMOJI_TRIE = new EmojiTrie(emojis);
@@ -75,7 +100,7 @@ public class EmojiManager {
   }
 
   /**
-   * Returns the {@link com.vdurmont.emoji.Emoji} for a given alias.
+   * Returns the {@link com.vdurmont.emoji.Emoji} for a given alias with any tag.
    *
    * @param alias the alias
    *
@@ -86,14 +111,175 @@ public class EmojiManager {
     if (alias == null || alias.isEmpty()) {
       return null;
     }
-    return EMOJIS_BY_ALIAS.get(trimAlias(alias));
+
+    Emoji out = null;
+    for (String tag : EMOJIS_BY_TAG_ALIAS.keySet()) {
+        out = EMOJIS_BY_TAG_ALIAS.get(tag).get(trimAlias(alias));
+        if (out != null) {
+            break;
+        }
+    }
+    return out;
   }
 
+    /**
+     * Returns the {@link com.vdurmont.emoji.Emoji} for a given alias with a given tag.
+     *
+     * @param alias the alias
+     * @param tag the tag
+     *
+     * @return the associated {@link com.vdurmont.emoji.Emoji}, null if the alias
+     * is unknown
+     */
+    public static Emoji getForAliasWithTag(String alias, String tag) {
+        if (alias == null) {
+            return null;
+        }
+
+        Map<String, Emoji> tagMap = EMOJIS_BY_TAG_ALIAS.get(tag);
+        if (tagMap == null) {
+            return null;
+        } else {
+            return tagMap.get(trimAlias(alias));
+        }
+    }
+
+    /**
+     * Enum of similarity algorithms to choose from
+     */
+    public enum SimilarityAlgorithm {
+        LEVENSHTEIN, FUZZY
+    }
+    /**
+     * Returns the {@link com.vdurmont.emoji.Emoji} for a given alias.
+     * Uses a {@link com.vdurmont.emoji.EmojiManager.SimilarityAlgorithm} to find the closest alias.
+     *
+     * @param alias the alias
+     * @param algorithm the text similarity algorithm
+     * @param threshold the similarity threshold as a percentage of the input word, from 0.0 - 1.0
+     *
+     * @return the associated {@link com.vdurmont.emoji.Emoji}, null if the alias
+     * is unknown
+     */
+    public static Emoji getForAliasWithSimilarity(String alias, SimilarityAlgorithm algorithm, float threshold) {
+        if (alias == null) {
+            return null;
+        }
+
+        Emoji out = null;
+        Set<String> aliasSet = new HashSet<String>();
+        for (String tag : EMOJIS_BY_TAG_ALIAS.keySet()) {
+            out = EMOJIS_BY_TAG_ALIAS.get(tag).get(trimAlias(alias));
+
+            if (out != null) {
+                // Found
+                return out;
+            } else {
+                // Failed initial check -> use spellchecking
+                 aliasSet.addAll(EMOJIS_BY_TAG_ALIAS.get(tag).keySet());
+            }
+        }
+
+        return getForAliasWithSimilarity(getClosestString(aliasSet, alias, algorithm, threshold), null, 0);
+    }
+
+    /**
+     * Returns the {@link com.vdurmont.emoji.Emoji} for a given alias with a given tag.
+     * Uses a {@link com.vdurmont.emoji.EmojiManager.SimilarityAlgorithm} to find the closest alias.
+     *
+     * @param alias the alias
+     * @param tag the tag
+     * @param algorithm the text similarity algorithm
+     * @param threshold the similarity threshold as a percentage of the input word, from 0.0 - 1.0
+     *
+     * @return the associated {@link com.vdurmont.emoji.Emoji}, null if the alias
+     * is unknown
+     */
+    public static Emoji getForAliasWithTagAndSimilarity(String alias, String tag, SimilarityAlgorithm algorithm, float threshold) {
+        if (alias == null) {
+            return null;
+        }
+
+        Map<String, Emoji> tagMap = EMOJIS_BY_TAG_ALIAS.get(tag);
+        if (tagMap == null) {
+            return null;
+        } else {
+            Emoji initialCheck = tagMap.get(trimAlias(alias));
+            // Failed initial check -> use spellchecking
+            if (initialCheck == null) {
+                Set<String> aliasSet = tagMap.keySet();
+                return tagMap.get(getClosestString(aliasSet, alias, algorithm, threshold));
+            }
+
+            return initialCheck;
+        }
+    }
+
+    private static String getClosestString(Set<String> wordSet, String queryStr, SimilarityAlgorithm algorithm, float threshold) {
+        int thresholdAsNumLetters = Math.round((1.0f - threshold) * queryStr.length());
+
+        Integer bestSimilarity = null;
+        String bestWord = null;
+
+        for (String storedAlias : wordSet) {
+            int sim;
+            switch (algorithm) {
+                case LEVENSHTEIN:
+                    sim = new LevenshteinDistance().apply(queryStr, storedAlias);
+
+                    if (bestSimilarity == null || bestSimilarity > sim) {
+                        // Found better
+                        bestSimilarity = sim;
+                        bestWord = storedAlias;
+                    }
+                    break;
+                case FUZZY:
+                    sim = new FuzzyScore(Locale.getDefault()).fuzzyScore(queryStr, storedAlias);
+
+                    if (bestSimilarity == null || bestSimilarity < sim) { // Fuzzy score is opposite direction of Levenshtein
+                        // Found better
+                        bestSimilarity = sim;
+                        bestWord = storedAlias;
+                    }
+                    break;
+                default:
+                    System.out.println("Invalid algorithm: " + algorithm + ".");
+                    return null;
+            }
+
+        }
+
+        if (bestSimilarity == null) {
+            // Nothing close found, or best similarity score does not meet threshold
+            return null;
+        }
+
+        boolean similarityMeetThreshold = false;
+        switch (algorithm) {
+            case LEVENSHTEIN:
+                similarityMeetThreshold = bestSimilarity < thresholdAsNumLetters;
+                break;
+            case FUZZY:
+                similarityMeetThreshold = bestSimilarity > thresholdAsNumLetters;
+                break;
+        }
+
+        if (similarityMeetThreshold) {
+            return bestWord;
+        } else {
+            return null;
+        }
+    }
+
   private static String trimAlias(String alias) {
-    int len = alias.length();
-    return alias.substring(
-            alias.charAt(0) == ':' ? 1 : 0,
-            alias.charAt(len - 1) == ':' ? len - 1 : len);
+      String result = alias;
+      if (result.startsWith(":")) {
+          result = result.substring(1, result.length());
+      }
+      if (result.endsWith(":")) {
+          result = result.substring(0, result.length() - 1);
+      }
+      return result;
   }
 
 
