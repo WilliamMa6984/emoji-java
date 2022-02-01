@@ -17,19 +17,19 @@ import static org.junit.Assert.assertTrue;
 public class EmojiManagerTest {
   @Test
   public void getForAliasWithTagAndSimilarity() {
-    Emoji test = EmojiManager.getForAliasWithTagAndSimilarity("toilat", EmojiManager.TAG_NONE, EmojiManager.SimilarityAlgorithm.FUZZY, 0.5f);
+    Emoji test = EmojiManager.getForAliasWithTagAndSimilarity("toilat", EmojiManager.TAG_NONE, EmojiManager.SimilarityAlgorithm.FUZZY, 0.5f).getEmoji();
     System.out.println(test == null ? "is Null" : test.getUnicode());
     System.out.println("======");
-    Emoji test2 = EmojiManager.getForAliasWithTagAndSimilarity("wataer1", EmojiManager.TAG_NONE, EmojiManager.SimilarityAlgorithm.FUZZY, 0.5f);
+    Emoji test2 = EmojiManager.getForAliasWithTagAndSimilarity("wataer1", EmojiManager.TAG_NONE, EmojiManager.SimilarityAlgorithm.FUZZY, 0.5f).getEmoji();
     System.out.println(test2 == null ? "is Null" : test2.getUnicode());
     System.out.println("======");
-    Emoji test3 = EmojiManager.getForAliasWithTagAndSimilarity("1toilat", "hardware", EmojiManager.SimilarityAlgorithm.FUZZY, 0.5f);
+    Emoji test3 = EmojiManager.getForAliasWithTagAndSimilarity("1toilat", "hardware", EmojiManager.SimilarityAlgorithm.FUZZY, 0.5f).getEmoji();
     System.out.println(test3 == null ? "is Null" : test3.getUnicode());
     System.out.println("======");
-    Emoji test4 = EmojiManager.getForAliasWithTagAndSimilarity("qea", "grocery", EmojiManager.SimilarityAlgorithm.LEVENSHTEIN, 0.5f);
+    Emoji test4 = EmojiManager.getForAliasWithTagAndSimilarity("qea", "grocery", EmojiManager.SimilarityAlgorithm.LEVENSHTEIN, 0.5f).getEmoji();
     System.out.println(test4 == null ? "is Null" : test4.getUnicode());
     System.out.println("======");
-    Emoji test5 = EmojiManager.getForAliasWithSimilarity("tool", EmojiManager.SimilarityAlgorithm.FUZZY, 0.5f);
+    Emoji test5 = EmojiManager.getForAliasWithSimilarity("tool", EmojiManager.SimilarityAlgorithm.FUZZY, 0.5f).getEmoji();
     System.out.println(test5 == null ? "is Null" : test5.getUnicode());
     System.out.println("======");
   }
