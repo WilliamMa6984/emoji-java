@@ -8,9 +8,6 @@ The Apache Software Foundation (https://www.apache.org/).
 
 package com.vdurmont.emoji;
 
-import org.apache.commons.text.similarity.FuzzyScore;
-import org.apache.commons.text.similarity.LevenshteinDistance;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
