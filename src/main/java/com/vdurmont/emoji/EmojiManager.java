@@ -161,7 +161,7 @@ public class EmojiManager {
      * @return the associated {@link com.vdurmont.emoji.Emoji}, null if the alias
      * is unknown
      */
-    public static AliasEmojiPair getForAliasWithSimilarity(String alias, SimilarityAlgorithm algorithm, float threshold) {
+    public static Emoji getForAliasWithSimilarity(String alias, SimilarityAlgorithm algorithm, float threshold) {
         if (alias == null) {
             return null;
         }
@@ -169,12 +169,11 @@ public class EmojiManager {
         Emoji out = null;
         Set<String> aliasSet = new HashSet<String>();
         for (String tag : EMOJIS_BY_TAG_ALIAS.keySet()) {
-            String str = trimAlias(alias);
-            out = EMOJIS_BY_TAG_ALIAS.get(tag).get(str);
+            out = EMOJIS_BY_TAG_ALIAS.get(tag).get(trimAlias(alias));
 
             if (out != null) {
                 // Found
-                return new AliasEmojiPair(str, out);
+                return out;
             } else {
                 // Failed initial check -> use spellchecking
                  aliasSet.addAll(EMOJIS_BY_TAG_ALIAS.get(tag).keySet());
@@ -196,7 +195,7 @@ public class EmojiManager {
      * @return the associated {@link com.vdurmont.emoji.Emoji}, null if the alias
      * is unknown
      */
-    public static AliasEmojiPair getForAliasWithTagAndSimilarity(String alias, String tag, SimilarityAlgorithm algorithm, float threshold) {
+    public static Emoji getForAliasWithTagAndSimilarity(String alias, String tag, SimilarityAlgorithm algorithm, float threshold) {
         if (alias == null) {
             return null;
         }
@@ -209,29 +208,10 @@ public class EmojiManager {
             // Failed initial check -> use spellchecking
             if (initialCheck == null) {
                 Set<String> aliasSet = tagMap.keySet();
-                String str = getClosestString(aliasSet, alias, algorithm, threshold);
-                return new AliasEmojiPair(str, tagMap.get(str));
-            } else {
-                return new AliasEmojiPair("", null);
+                return tagMap.get(getClosestString(aliasSet, alias, algorithm, threshold));
             }
-        }
-    }
 
-    public static class AliasEmojiPair {
-        private String alias;
-        private Emoji emoji;
-
-        public AliasEmojiPair(String alias, Emoji emoji) {
-            this.alias = alias;
-            this.emoji = emoji;
-        }
-
-        public Emoji getEmoji() {
-            return emoji;
-        }
-
-        public String getAlias() {
-            return alias;
+            return initialCheck;
         }
     }
 
